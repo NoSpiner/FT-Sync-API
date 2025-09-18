@@ -1,9 +1,12 @@
 # FT-Sync-API
-API for syncronizing FreeTube playlists and subscriptions
+API for saving and syncronizing [FreeTube](https://freetubeapp.io/) playlists and subscriptions over the network.
 
 [documentation](docs.md)
 
-No client included (yet), but with a bit tinkering should be possible. (probably like 4 curl commands oe 10 lines of python)
+No client included (yet), but with a bit tinkering should be possible. (probably like 4 curl commands in bash or 10 lines of python)
+
+Remember to close Freetube if tinkering with playlists.db and profiles.db files to avoid file corruption. 
+Also ffs don't open this to the internet. It's got no authethficiation.
 
 
 Some launch options
@@ -14,4 +17,4 @@ Some launch options
  
     -port string
  
-      port that will be used 9191, by default (default "9191")
+      port that will be used 9191, by default
