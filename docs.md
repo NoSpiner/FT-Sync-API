@@ -1,3 +1,13 @@
+## Installation
+
+Install Golang
+
+test with "go run ."
+
+build
+
+        go build .
+
 ## Uploading
 
 Examples are given using curl. Python request library works as well.
