@@ -125,10 +125,10 @@ func addPlaylist(db *sql.DB, playlist Playlist){
 			}
 }
 
-func addVideo(db *sql.DB,video *Video, playlist string){
+func addVideo(tx *sql.Tx,video *Video, playlist string){
 	query := "INSERT OR IGNORE INTO videos (VideoId,Title,Author, AuthorId, Published, LengthSeconds, TimeAdded, Type, playlistItemId, Playlist) VALUES (?,?,?,?,?,?,?,?,?,?)"
 	Mutex.Lock()
-	_,err := db.Exec(query,video.VideoId,video.Title,video.Author,video.AuthorId,video.Published,video.LengthSeconds,video.TimeAdded,"video",video.PlaylistItemId,playlist)
+	_,err := tx.Exec(query,video.VideoId,video.Title,video.Author,video.AuthorId,video.Published,video.LengthSeconds,video.TimeAdded,"video",video.PlaylistItemId,playlist)
 	Mutex.Unlock()
 	if err != nil{
 	log.Println(err)
@@ -155,11 +155,6 @@ func importFtPlaylists(db *sql.DB ,data string){
 	//if err != nil{log.Fatal(err)}
 	temp := strings.ReplaceAll(string(data), "}\n{", "}SEPARATOR{")
 	playlistJsonList := strings.Split(temp,"SEPARATOR")
-	tx, err := db.Begin()
-  if err != nil {
-      log.Fatal(err)
-  }
-	defer tx.Rollback()
 	for _,i := range playlistJsonList{
 		var playlist Playlist
 		err := json.Unmarshal([]byte(i), &playlist)
@@ -167,18 +162,25 @@ func importFtPlaylists(db *sql.DB ,data string){
 		processPlaylist(playlist)
 	}
 
-	err = tx.Commit()
-  if err != nil {
-      log.Fatal(err)
-  }
 }
 
 func processPlaylist(playlist Playlist){
 		addPlaylist(db,playlist)
 		deleteVideos(playlist.PlaylistName)
+	tx, err := db.Begin()
+  if err != nil {
+      log.Fatal(err)
+  }
+	defer tx.Rollback()
+
 		for _,video_item := range playlist.Videos{
-			addVideo(db,video_item,playlist.PlaylistName)	
+			addVideo(tx,video_item,playlist.PlaylistName)	
     }
+		
+	err = tx.Commit()
+  if err != nil {
+      log.Fatal(err)
+  }
 }
 
 func getAllVideos(db *sql.DB)[]Video{
@@ -247,11 +249,6 @@ func importFtSubscriptions(data string){
 // name, bgColor, textColor, subscriptions, _id
 	temp := strings.ReplaceAll(string(data), "}\n{", "}SEPARATOR{")
 	subscriptionsJsonList := strings.Split(temp,"SEPARATOR")
-	tx, err := db.Begin()
-	if err != nil {
-	log.Fatal(err)
-	}
-	defer tx.Rollback()
 
 	for _,i := range subscriptionsJsonList{
 		var channelGroup ChannelGroup
@@ -260,18 +257,25 @@ func importFtSubscriptions(data string){
 		processChannelgroup(channelGroup)
 	}
 
-	err = tx.Commit()
-	if err != nil {
-		log.Fatal(err)
-	}
 }
 
 func processChannelgroup(channelgroup ChannelGroup){
 		addChannelgroup(channelgroup)
 		deleteSubscriptions(channelgroup.Name)
+	tx, err := db.Begin()
+	if err != nil {
+	log.Fatal(err)
+	}
+	defer tx.Rollback()
+
 		for _,subscription := range channelgroup.Subscriptions{
-			addSub(subscription,channelgroup.Name)	
+			addSub(tx, subscription,channelgroup.Name)	
     }
+
+	err = tx.Commit()
+	if err != nil {
+		log.Fatal(err)
+	}
 }
 
 func addChannelgroup(channelgroup ChannelGroup){
@@ -284,10 +288,10 @@ func addChannelgroup(channelgroup ChannelGroup){
 
 }
 
-func addSub(subscription *Subscription, channeGroupName string){
+func addSub(tx *sql.Tx, subscription *Subscription, channeGroupName string){
 	query := "INSERT OR IGNORE INTO subscriptions (Name, ChannelId, Thumbnail, Selected, ChannelGroup ) VALUES (?,?,?,?,?)"
 	Mutex.Lock()
-	_,err := db.Exec(query,subscription.Name, subscription.Id, subscription.Thumbnail, subscription.Selected, channeGroupName)
+	_,err := tx.Exec(query,subscription.Name, subscription.Id, subscription.Thumbnail, subscription.Selected, channeGroupName)
 	Mutex.Unlock()
 	if err != nil{
 	log.Println(err)
