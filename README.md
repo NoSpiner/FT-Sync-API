@@ -9,6 +9,7 @@ Remember to close Freetube if tinkering with playlists.db and profiles.db files 
 Also ffs don't open this to the internet. It's got no authethficiation.
 
 
+
 Some launch options
 
     -addr string
@@ -18,3 +19,5 @@ Some launch options
     -port string
  
       port that will be used 9191, by default
+
+You can find an use for this if you want your Freetube data in Sql format.
