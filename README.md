@@ -3,11 +3,10 @@ API for saving and syncronizing [FreeTube](https://freetubeapp.io/) playlists an
 
 [documentation](docs.md)
 
-No client included, but with a bit tinkering should be possible. (probably like 4 curl commands in bash or 10 lines of python)
+[A simple example client](Client.sh) included, with a bit tinkering should be possible to write a better one. 
 
 Remember to close Freetube if tinkering with playlists.db and profiles.db files to avoid file corruption. 
 Also ffs don't open this to the internet. It's got no authethficiation.
-
 
 
 Some launch options
