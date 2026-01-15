@@ -1,12 +1,15 @@
-# Stage 1 Build
-From golang:latest AS build
+FROM golang:latest AS build
+ENV CGO_ENABLED=0
 WORKDIR /FT
-COPY . .
+COPY go.mod go.sum ./
 RUN go mod download
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o FT-Sync-API . 
+COPY . .
+RUN go get github.com/gin-gonic/gin
+RUN go get github.com/glebarez/go-sqlite 
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o ft-sync-api .
 # Stage 2 - Runtime
-FROM alpine:latest
+FROM scratch
 WORKDIR /app
-COPY --from=build /FT/FT-Sync-API .
+COPY --from=build /FT/ft-sync-api .
 EXPOSE 9191
-ENTRYPOINT ["./FT-Sync-API", "-addr", "0.0.0.0"] 
+ENTRYPOINT ["./ft-sync-api", "-addr", "0.0.0.0"] 
