@@ -119,7 +119,7 @@ func uploadPlaylists (c *gin.Context) {
 		openedFile,_ := file.Open()
 		fileContent, _ := io.ReadAll(openedFile)
 		log.Println("uploaded:", file.Filename)
-    importFtPlaylists(db,string(fileContent))
+    go importFtPlaylists(db,string(fileContent))
     c.String(http.StatusOK, fmt.Sprintf("'%s' uploaded", file.Filename))
   }
 
@@ -150,7 +150,7 @@ func uploadSubscriptions(c *gin.Context){
 		openedFile,_ := file.Open()
 		fileContent, _ := io.ReadAll(openedFile)
 		log.Println("uploaded:", file.Filename)
-    importFtSubscriptions(string(fileContent))
+    go importFtSubscriptions(string(fileContent))
     c.String(http.StatusOK, fmt.Sprintf("'%s' uploaded", file.Filename))
 }
 
