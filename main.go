@@ -1,221 +1,270 @@
 package main
 
 import (
+    "database/sql"
+    "encoding/json"
+    "flag"
+    "fmt"
+    "io"
     "log"
-    _ "github.com/glebarez/go-sqlite"
-    "github.com/gin-gonic/gin"
     "net/http"
-		"io"
-		"fmt"
-		"encoding/json"
-		"flag"
+    "strings"
+    _ "github.com/glebarez/go-sqlite"
 )
 
 
 func main() {
-	port := flag.String("port","9191", "port that will be used 9191, by default")
-	addr := flag.String("addr","", "ip address that will be used. Localhost by default")
-	flag.Parse()
-	connection := *addr+":"+*port
-  log.Println("Connected to the SQLite database successfully.")
-	defer db.Close()
-	createTables(db)
-	gin.SetMode(gin.ReleaseMode)
-	router := gin.Default()
-
-	router.GET("/videos", getVideos)
-	router.GET("/videos/:id", getVideosID)
-	router.GET("/playlists", getPlaylists)
-	router.GET("/playlists/:id", getPlaylistID)
-	router.POST("/videos", uploadPlaylists)
-	router.POST("/playlists", uploadPlaylists)
-	router.GET("/playlistsDB", getPlaylistsDB)
-	router.DELETE("/playlists/:id", deletePlaylistID)
-
-	router.POST("/subscriptions", uploadSubscriptions)
-	router.POST("/channelgroups", uploadSubscriptions)
-	router.GET("/subscriptions", getSubs)
-	router.GET("/subscriptions/:id", getSubsID)
-	router.GET("/channelgroups", getChannelGroups)
-	router.GET("/channelgroups/:id", getChannelGroupsID)
-	router.GET("/channelgroupsDB", getChannelGroupsDB)
-	router.DELETE("/channelgroups/:id",deleteChannelGroupsID )
-	
-
-	log.Println("Server running on", connection)
-	log.Fatal(router.Run(connection))
-
-	}
-
-
-func getPlaylists(c *gin.Context){
-		c.JSON(http.StatusOK, getAllPlaylists(db))
-
+    port := flag.String("port", "9191", "port that will be used 9191, by default")
+    addr := flag.String("addr", "", "ip address that will be used. Localhost by default")
+    flag.Parse()
+    connection := *addr + ":" + *port
+    
+    var err error
+    db, err = sql.Open("sqlite", "./data.db")
+    if err != nil {
+        log.Fatal("Failed to connect to database:", err)
+    }
+    defer db.Close()
+    
+    log.Println("Connected to the SQLite database successfully.")
+    createTables(db)
+    
+    mux := http.NewServeMux()
+    
+    mux.HandleFunc("GET /videos", getVideos)
+    mux.HandleFunc("GET /videos/", getVideosID)
+    mux.HandleFunc("GET /playlists", getPlaylists)
+    mux.HandleFunc("GET /playlists/", getPlaylistID)
+    mux.HandleFunc("POST /videos", uploadPlaylists)
+    mux.HandleFunc("POST /playlists", uploadPlaylists)
+    mux.HandleFunc("GET /playlistsDB", getPlaylistsDB)
+    mux.HandleFunc("DELETE /playlists/", deletePlaylistID)
+    
+    mux.HandleFunc("POST /subscriptions", uploadSubscriptions)
+    mux.HandleFunc("POST /channelgroups", uploadSubscriptions)
+    mux.HandleFunc("GET /subscriptions", getSubs)
+    mux.HandleFunc("GET /subscriptions/", getSubsID)
+    mux.HandleFunc("GET /channelgroups", getChannelGroups)
+    mux.HandleFunc("GET /channelgroups/", getChannelGroupsID)
+    mux.HandleFunc("GET /channelgroupsDB", getChannelGroupsDB)
+    mux.HandleFunc("DELETE /channelgroups/", deleteChannelGroupsID)
+    
+    server := &http.Server{
+        Addr:    connection,
+        Handler: mux,
+    }
+    
+    log.Println("Server running on", connection)
+    log.Fatal(server.ListenAndServe())
 }
 
-func getPlaylistID(c *gin.Context){
-	  id := c.Param("id")
+func getPlaylists(w http.ResponseWriter, r *http.Request) {
+    w.Header().Set("Content-Type", "application/json")
+    json.NewEncoder(w).Encode(getAllPlaylists(db))
+}
+
+func getPlaylistID(w http.ResponseWriter, r *http.Request) {
+    id := strings.TrimPrefix(r.URL.Path, "/playlists/")
     for _, playlist := range getAllPlaylists(db) {
         if playlist.PlaylistName == id {
-   					c.JSON(http.StatusOK, playlist)
-						return
+            w.Header().Set("Content-Type", "application/json")
+            json.NewEncoder(w).Encode(playlist)
+            return
         }
     }
-    c.JSON(http.StatusNotFound, gin.H{"error": "Playlist not found"})
+    w.Header().Set("Content-Type", "application/json")
+    w.WriteHeader(http.StatusNotFound)
+    json.NewEncoder(w).Encode(map[string]string{"error": "Playlist not found"})
 }
 
-func getVideos(c *gin.Context) {
-    c.JSON(http.StatusOK, getAllVideos(db))
+func getVideos(w http.ResponseWriter, r *http.Request) {
+    w.Header().Set("Content-Type", "application/json")
+    json.NewEncoder(w).Encode(getAllVideos(db))
 }
 
-func getPlaylistsDB(c *gin.Context) {
-		var returnString string
+func getPlaylistsDB(w http.ResponseWriter, r *http.Request) {
+    var returnString string
     for _, playlist := range getAllPlaylists(db) {
-			jsonBytes, err := json.Marshal(playlist)
-    if err != nil {
-        log.Println(err)
-			}
-		playlistString := string(jsonBytes) +"\n"
-		returnString = returnString+playlistString
-		}
-       c.String(http.StatusOK, returnString)
+        jsonBytes, err := json.Marshal(playlist)
+        if err != nil {
+            log.Println(err)
+        }
+        playlistString := string(jsonBytes) + "\n"
+        returnString = returnString + playlistString
+    }
+    w.Header().Set("Content-Type", "text/plain")
+    w.Write([]byte(returnString))
 }
 
-
-
-func getVideosID(c *gin.Context){
-	  id := c.Param("id")
+func getVideosID(w http.ResponseWriter, r *http.Request) {
+    id := strings.TrimPrefix(r.URL.Path, "/videos/")
     var videos []Video
     for _, video := range getAllVideos(db) {
         if video.Playlist == id {
-						videos = append(videos, video)
+            videos = append(videos, video)
         }
     }
-   	if len(videos) >0 {c.JSON(http.StatusOK, videos)
-		}else{
-    c.JSON(http.StatusNotFound, gin.H{"error": "Playlist not found"})}
+    w.Header().Set("Content-Type", "application/json")
+    if len(videos) > 0 {
+        json.NewEncoder(w).Encode(videos)
+    } else {
+        w.WriteHeader(http.StatusNotFound)
+        json.NewEncoder(w).Encode(map[string]string{"error": "Playlist not found"})
+    }
 }
 
-// I don't know why this even exists :(
-func updatePlaylist(c *gin.Context) {
+func updatePlaylist(w http.ResponseWriter, r *http.Request) {
     var updatedPlaylist Playlist
-    if err := c.BindJSON(&updatedPlaylist); err != nil {
-        //c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input"})
-        //return
+    if err := json.NewDecoder(r.Body).Decode(&updatedPlaylist); err != nil {
+        // Ignore error as in original
     }
-				processPlaylist(updatedPlaylist)
-      	c.JSON(http.StatusOK, updatedPlaylist)
-        return
+    processPlaylist(updatedPlaylist)
+    w.Header().Set("Content-Type", "application/json")
+    json.NewEncoder(w).Encode(updatedPlaylist)
 }
 
-func uploadPlaylists (c *gin.Context) {
-    // single file
-    file, err := c.FormFile("file")
+func uploadPlaylists(w http.ResponseWriter, r *http.Request) {
+    err := r.ParseMultipartForm(32 << 20) // 32 MB max memory
     if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save file"})
-        log.Println("upload failed")
-				return
+        w.Header().Set("Content-Type", "application/json")
+        w.WriteHeader(http.StatusInternalServerError)
+        json.NewEncoder(w).Encode(map[string]string{"error": "Failed to parse form"})
+        log.Println("upload failed:", err)
+        return
     }
-		openedFile,_ := file.Open()
-		fileContent, _ := io.ReadAll(openedFile)
-		log.Println("uploaded:", file.Filename)
-    go importFtPlaylists(db,string(fileContent))
-    c.String(http.StatusOK, fmt.Sprintf("'%s' uploaded", file.Filename))
-  }
+    
+    file, handler, err := r.FormFile("file")
+    if err != nil {
+        w.Header().Set("Content-Type", "application/json")
+        w.WriteHeader(http.StatusInternalServerError)
+        json.NewEncoder(w).Encode(map[string]string{"error": "Failed to save file"})
+        log.Println("upload failed")
+        return
+    }
+    defer file.Close()
+    
+    fileContent, _ := io.ReadAll(file)
+    log.Println("uploaded:", handler.Filename)
+    go importFtPlaylists(db, string(fileContent))
+    w.Write([]byte(fmt.Sprintf("'%s' uploaded", handler.Filename)))
+}
 
-func deletePlaylistID(c *gin.Context){
-	  id := c.Param("id")
-		exists := false
+func deletePlaylistID(w http.ResponseWriter, r *http.Request) {
+    id := strings.TrimPrefix(r.URL.Path, "/playlists/")
+    exists := false
     for _, playlist := range getAllPlaylists(db) {
         if playlist.PlaylistName == id {
-   					exists = true
+            exists = true
         }
     }
-		if ! exists{
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "No such playlist!"})
-				return
-			}
-		deleteVideos(id)
-		deletePlaylist(id)
-		c.JSON(http.StatusOK, gin.H{"message":"Playlist deleted"})
-}
-
-func uploadSubscriptions(c *gin.Context){
-    file, err := c.FormFile("file")
-    if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save file"})
-        log.Println("upload failed")
-				return
+    if !exists {
+        w.Header().Set("Content-Type", "application/json")
+        w.WriteHeader(http.StatusInternalServerError)
+        json.NewEncoder(w).Encode(map[string]string{"error": "No such playlist!"})
+        return
     }
-		openedFile,_ := file.Open()
-		fileContent, _ := io.ReadAll(openedFile)
-		log.Println("uploaded:", file.Filename)
+    deleteVideos(id)
+    deletePlaylist(id)
+    w.Header().Set("Content-Type", "application/json")
+    json.NewEncoder(w).Encode(map[string]string{"message": "Playlist deleted"})
+}
+
+func uploadSubscriptions(w http.ResponseWriter, r *http.Request) {
+    err := r.ParseMultipartForm(32 << 20)
+    if err != nil {
+        w.Header().Set("Content-Type", "application/json")
+        w.WriteHeader(http.StatusInternalServerError)
+        json.NewEncoder(w).Encode(map[string]string{"error": "Failed to parse form"})
+        log.Println("upload failed:", err)
+        return
+    }
+    
+    file, handler, err := r.FormFile("file")
+    if err != nil {
+        w.Header().Set("Content-Type", "application/json")
+        w.WriteHeader(http.StatusInternalServerError)
+        json.NewEncoder(w).Encode(map[string]string{"error": "Failed to save file"})
+        log.Println("upload failed")
+        return
+    }
+    defer file.Close()
+    
+    fileContent, _ := io.ReadAll(file)
+    log.Println("uploaded:", handler.Filename)
     go importFtSubscriptions(string(fileContent))
-    c.String(http.StatusOK, fmt.Sprintf("'%s' uploaded", file.Filename))
+    w.Write([]byte(fmt.Sprintf("'%s' uploaded", handler.Filename)))
 }
 
-func getSubs(c *gin.Context){
-		c.JSON(http.StatusOK, getAllSubscriptions())
+func getSubs(w http.ResponseWriter, r *http.Request) {
+    w.Header().Set("Content-Type", "application/json")
+    json.NewEncoder(w).Encode(getAllSubscriptions())
 }
 
-func getSubsID(c *gin.Context){
-	  id := c.Param("id")
-		var IdSubs []Subscription
+func getSubsID(w http.ResponseWriter, r *http.Request) {
+    id := strings.TrimPrefix(r.URL.Path, "/subscriptions/")
+    var IdSubs []Subscription
     for _, sub := range getAllSubscriptions() {
         if sub.ChannelGroupName == id {
-					IdSubs = append(IdSubs,sub)
+            IdSubs = append(IdSubs, sub)
         }
     }
-   	c.JSON(http.StatusOK, IdSubs)
-		if len(IdSubs) ==0{
-    c.JSON(http.StatusNotFound, gin.H{"error": "Channel group not found"})}
-}
-
-
-func getChannelGroups(c *gin.Context){
-		c.JSON(http.StatusOK, getAllChannelGroups())
-
-}
-
-func getChannelGroupsID(c *gin.Context){
-	  id := c.Param("id")
-    for _, group := range getAllChannelGroups(){
-        if group.Name == id {
-   					c.JSON(http.StatusOK, group)
-						return
-        }
+    w.Header().Set("Content-Type", "application/json")
+    json.NewEncoder(w).Encode(IdSubs)
+    if len(IdSubs) == 0 {
+        w.WriteHeader(http.StatusNotFound)
+        json.NewEncoder(w).Encode(map[string]string{"error": "Channel group not found"})
     }
-    c.JSON(http.StatusNotFound, gin.H{"error": "Channel group not found"})
 }
 
-func getChannelGroupsDB(c *gin.Context){
-		var returnString string
-    for _, group := range getAllChannelGroups() {
-			jsonBytes, err := json.Marshal(group)
-    if err != nil {
-        log.Println(err)
-			}
-		groupString := string(jsonBytes) +"\n"
-		returnString = returnString+groupString
-		}
-       c.String(http.StatusOK, returnString)
-
+func getChannelGroups(w http.ResponseWriter, r *http.Request) {
+    w.Header().Set("Content-Type", "application/json")
+    json.NewEncoder(w).Encode(getAllChannelGroups())
 }
 
-
-func deleteChannelGroupsID(c *gin.Context){
-	  id := c.Param("id")
-		exists := false
+func getChannelGroupsID(w http.ResponseWriter, r *http.Request) {
+    id := strings.TrimPrefix(r.URL.Path, "/channelgroups/")
     for _, group := range getAllChannelGroups() {
         if group.Name == id {
-   					exists = true
+            w.Header().Set("Content-Type", "application/json")
+            json.NewEncoder(w).Encode(group)
+            return
         }
     }
-		if ! exists{
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "No such channel group!"})
-				return
-			}
-		deleteSubscriptions(id)
-		deleteChannelGroup(id)
-		c.JSON(http.StatusOK, gin.H{"message":"Channel group deleted"})
+    w.Header().Set("Content-Type", "application/json")
+    w.WriteHeader(http.StatusNotFound)
+    json.NewEncoder(w).Encode(map[string]string{"error": "Channel group not found"})
+}
+
+func getChannelGroupsDB(w http.ResponseWriter, r *http.Request) {
+    var returnString string
+    for _, group := range getAllChannelGroups() {
+        jsonBytes, err := json.Marshal(group)
+        if err != nil {
+            log.Println(err)
+        }
+        groupString := string(jsonBytes) + "\n"
+        returnString = returnString + groupString
+    }
+    w.Header().Set("Content-Type", "text/plain")
+    w.Write([]byte(returnString))
+}
+
+func deleteChannelGroupsID(w http.ResponseWriter, r *http.Request) {
+    id := strings.TrimPrefix(r.URL.Path, "/channelgroups/")
+    exists := false
+    for _, group := range getAllChannelGroups() {
+        if group.Name == id {
+            exists = true
+        }
+    }
+    if !exists {
+        w.Header().Set("Content-Type", "application/json")
+        w.WriteHeader(http.StatusInternalServerError)
+        json.NewEncoder(w).Encode(map[string]string{"error": "No such channel group!"})
+        return
+    }
+    deleteSubscriptions(id)
+    deleteChannelGroup(id)
+    w.Header().Set("Content-Type", "application/json")
+    json.NewEncoder(w).Encode(map[string]string{"message": "Channel group deleted"})
 }

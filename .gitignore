@@ -33,3 +33,4 @@ go.work.sum
 # .vscode/
 
 *.db
+FT-Sync-API
